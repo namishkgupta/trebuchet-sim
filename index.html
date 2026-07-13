@@ -59,7 +59,31 @@
       var(--panel);
     border: 1px solid #2a3138;
     border-radius: 2px;
+    cursor: grab;
+    touch-action: none;
   }
+  canvas#main.dragging{ cursor: grabbing; }
+  .canvasWrap{
+    position: relative;
+  }
+  .viewControls{
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    z-index: 2;
+  }
+  .viewControls button{
+    flex: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    font-size: 15px;
+    background: rgba(23,28,33,0.85);
+    backdrop-filter: blur(2px);
+  }
+  .viewControls button.wide{ width: auto; padding: 0 10px; font-size: 10.5px; }
   .readouts{
     display:grid;
     grid-template-columns: repeat(4, 1fr);
@@ -199,9 +223,17 @@
     <div class="subtitle">
       Long arm = 2.01682 m · short arm = 0.42318 m (fixed, per your optimization). Set counterweight mass, sling length,
       and projectile mass below, then run the arc. "Angle of chudness" is the sling's angle relative to the long arm,
-      unwrapped — 0° at the folded start, growing as the sling whips ahead of or behind the arm.
+      unwrapped — 180° when folded flat back along the beam at the start, increasing as the sling whips around.
     </div>
-    <canvas id="main"></canvas>
+    <div class="canvasWrap">
+      <div class="viewControls">
+        <button id="zoomInBtn" title="Zoom in">+</button>
+        <button id="zoomOutBtn" title="Zoom out">−</button>
+        <button id="fitBtn" class="wide" title="Fit view to trajectory">Fit</button>
+        <button id="resetViewBtn" class="wide" title="Reset view">Reset view</button>
+      </div>
+      <canvas id="main"></canvas>
+    </div>
     <div class="readouts">
       <div class="stat">
         <div class="label">Beam angle θ</div>
@@ -224,11 +256,11 @@
         <div class="value" id="rMaxSpeed">— m/s</div>
       </div>
       <div class="stat peak">
-        <div class="label">Chudness at max speed</div>
+        <div class="label">Chudness where speed peaks</div>
         <div class="value" id="rMaxChud">—°</div>
       </div>
       <div class="stat peak">
-        <div class="label">θ at max speed</div>
+        <div class="label">θ where speed peaks</div>
         <div class="value" id="rMaxTheta">—°</div>
       </div>
       <div class="stat">
@@ -291,19 +323,15 @@
     </div>
 
     <div class="field">
-      <label>Release trigger</label>
+      <label>Release at angle of chudness (°)</label>
       <div class="row">
-        <select id="releaseMode">
-          <option value="auto">At max sling speed (auto)</option>
-          <option value="chud">At angle of chudness</option>
-        </select>
+        <input type="range" id="releaseTargetSlider" min="180" max="720" step="1" value="315">
+        <input type="number" id="releaseTargetNum" value="315" step="1">
       </div>
-    </div>
-
-    <div class="field" id="releaseTargetField" style="display:none;">
-      <label>Target angle of chudness (deg)</label>
-      <div class="row">
-        <input type="number" id="releaseTargetNum" value="135" step="1">
+      <div class="note" style="margin-top:6px;">
+        Chudness starts at 180° (sling folded flat back along the beam) and increases
+        as the sling whips around — watch the live readout and the "chudness at max speed"
+        stat below to pick a sensible target.
       </div>
     </div>
 
@@ -328,19 +356,16 @@
     <div class="note">
       <b>Model</b>: the beam's tangential acceleration uses your derived
       α(θ) = ((8.372M − 31.265)/(0.179M + 2.243))·cos(θ), independent of the sling
-      (per your assumption that projectile mass is negligible for the beam). The sling is then
-      simulated as a pendulum hanging from the accelerating tip — its swing depends on
-      the tip's real acceleration (not just gravity), which is what lets it whip ahead of or
-      loop past the arm. At release, the projectile switches to free ballistic flight
-      (gravity only) until it hits the ground, so you'll see it actually let go and fly a
-      trajectory rather than staying tethered for the whole arc.
+      (per your assumption that projectile mass is negligible for the beam). The sling starts
+      folded flat back along the beam (chudness = 180°) rather than extended past the tip,
+      matching how a real trebuchet sling sits before launch. It's then simulated as a pendulum
+      hanging from the accelerating tip, which is what lets it whip ahead of or loop past the arm.
       <br><br>
-      <b>Worth knowing</b>: "max sling speed" isn't automatically the best release —
-      the fastest moment can occur early in the swing, while the sling is still moving mostly
-      upward or even backward, which can land the range negative. That's a real tradeoff:
-      speed and direction don't always peak together. Try the chudness-based release
-      and compare range across different S values to find a combination that actually
-      throws forward well, not just fast.
+      <b>Release</b> is fully under your control via the angle of chudness above — the sim
+      doesn't pick it for you. What it does give you is the "chudness/θ where speed peaks"
+      readouts, computed across the whole swing regardless of when you choose to release,
+      so you can compare your chosen release point against where the theoretical peak
+      actually is.
       <br><br>
       Projectile mass currently only affects display, not beam dynamics —
       matching your stated assumption. If you want it to feed back into the beam (heavier
@@ -356,6 +381,9 @@
   const thetaF = Math.PI + Math.asin(Math.min(1, pivotH / L2));
   document.getElementById('thetaRange').textContent =
     (thetaI*180/Math.PI).toFixed(1) + '° to ' + (thetaF*180/Math.PI).toFixed(1) + '°';
+  // Initial sling angle folds back along the beam (toward the pivot), matching
+  // a real trebuchet's pre-launch sling lying flat against the throwing arm.
+  const phi0 = thetaI + Math.PI;
 
   function accel(theta, M){
     return ((8.372*M - 31.265) / (0.179*M + 2.243)) * Math.cos(theta);
@@ -406,8 +434,7 @@
   const runBtn = document.getElementById('runBtn');
   const resetBtn = document.getElementById('resetBtn');
   const warnBox = document.getElementById('warnBox');
-  const releaseModeSel = document.getElementById('releaseMode');
-  const releaseTargetField = document.getElementById('releaseTargetField');
+  const releaseTargetSlider = document.getElementById('releaseTargetSlider');
   const releaseTargetNum = document.getElementById('releaseTargetNum');
 
   function link(slider, num, onChange){
@@ -419,7 +446,6 @@
   let currentS = parseFloat(slingSlider.value);
   let currentM_proj = parseFloat(projSlider.value);
   let playbackSpeed = parseFloat(speedSlider.value);
-  let releaseMode = releaseModeSel.value;
   let releaseTargetDeg = parseFloat(releaseTargetNum.value);
 
   function onParamChange(){
@@ -432,20 +458,16 @@
 
   function onSpeedChange(){ playbackSpeed = parseFloat(speedNum.value); }
 
-  releaseModeSel.addEventListener('change', ()=>{
-    releaseMode = releaseModeSel.value;
-    releaseTargetField.style.display = (releaseMode === 'chud') ? 'block' : 'none';
-    if (!running) resetSim();
-  });
-  releaseTargetNum.addEventListener('input', ()=>{
+  function onReleaseTargetChange(){
     releaseTargetDeg = parseFloat(releaseTargetNum.value);
     if (!running) resetSim();
-  });
+  }
 
   link(massSlider, massNum, onParamChange);
   link(slingSlider, slingNum, onParamChange);
   link(projSlider, projNum, onParamChange);
   link(speedSlider, speedNum, onSpeedChange);
+  link(releaseTargetSlider, releaseTargetNum, onReleaseTargetChange);
 
   function checkWarning(){
     const a0 = accel(thetaI, currentM);
@@ -458,14 +480,13 @@
   }
 
   // ---- Simulation state ----
-  let state = [thetaI, 0, thetaI, 0]; // theta, omega, phi, phidot
+  let state = [thetaI, 0, phi0, 0]; // theta, omega, phi, phidot
   let simTime = 0;
   let running = false;
   let finished = false;
   let armStarted = false;   // true once omega has clearly gone positive
   let armFinished = false;  // true once the beam has reached its turning point
   let maxSpeed = 0, maxChud = 0, maxTheta = 0;
-  let maxSpeedVX = 0, maxSpeedVY = 0, maxSpeedX = 0, maxSpeedY = 0, maxSpeedTime = 0;
   let history = []; // {chud, speed}
   const dt = 0.0004;
   const MAX_ARM_TIME = 8;     // safety cap on the powered swing, in simulated seconds
@@ -475,16 +496,24 @@
   let releaseInfo = null;   // {x,y,vx,vy,chud,theta,speed,time}
   let landed = false;
   let landingInfo = null;   // {x, range, time}
+  // Persists across runs — only cleared by the Reset button — so multiple
+  // release-angle trials can be compared on the canvas at once.
+  let pastLandings = [];    // [{x, range, chud, theta}]
+  const MAX_PAST_LANDINGS = 10;
 
   function resetSim(){
-    state = [thetaI, 0, thetaI, 0];
+    if (trail.length > 1){
+      trailHistory.push(trail);
+      if (trailHistory.length > MAX_TRAIL_HISTORY) trailHistory.shift();
+    }
+    trail = [];
+    state = [thetaI, 0, phi0, 0];
     simTime = 0;
     running = false;
     finished = false;
     armStarted = false;
     armFinished = false;
     maxSpeed = 0; maxChud = 0; maxTheta = 0;
-    maxSpeedVX = 0; maxSpeedVY = 0; maxSpeedX = 0; maxSpeedY = 0; maxSpeedTime = 0;
     history = [];
     released = false;
     releaseInfo = null;
@@ -507,6 +536,30 @@
     releaseInfo = info;
     document.getElementById('rRelease').textContent = 'released';
     document.getElementById('rRelSpeed').textContent = info.speed.toFixed(2) + ' m/s';
+    if (info.y <= -pivotH){
+      // Sling was already at/below ground level at the chosen release point
+      // (can happen with long slings relative to the arm) — land immediately
+      // rather than reporting a nonsensical negative flight time.
+      landNow(info.x, 0);
+    }
+  }
+
+  function landNow(x, te){
+    landed = true;
+    finished = true;
+    running = false;
+    landingInfo = {x, range: x, time: te};
+    pastLandings.push({
+      x, range: x,
+      chud: releaseInfo ? releaseInfo.chud : null,
+      theta: releaseInfo ? releaseInfo.theta : null
+    });
+    if (pastLandings.length > MAX_PAST_LANDINGS) pastLandings.shift();
+    document.getElementById('rRelease').textContent = 'landed';
+    document.getElementById('rRange').textContent = x.toFixed(2) + ' m';
+    document.getElementById('rFlightTime').textContent = te.toFixed(3) + ' s';
+    document.getElementById('rStatus').textContent = te === 0 ? 'released below ground level' : 'landed';
+    runBtn.textContent = 'Run';
   }
 
   // Note: the beam's own equation is energy-conservative, so it swings up
@@ -545,35 +598,27 @@
           document.getElementById('rStatus').textContent = 'arc complete';
         }
 
-        if (!released){
-          const kin = projectileKinematics(state);
-          const currChud = (state[2] - state[0]) * 180 / Math.PI;
-          if (kin.speed > maxSpeed){
-            maxSpeed = kin.speed;
-            maxChud = currChud;
-            maxTheta = state[0] * 180 / Math.PI;
-            maxSpeedVX = kin.xpd; maxSpeedVY = kin.ypd;
-            maxSpeedX = kin.xp; maxSpeedY = kin.yp;
-            maxSpeedTime = simTime;
-          }
-          if (n % 25 === 0){
-            history.push({chud: currChud, speed: kin.speed});
-            if (history.length > 2000) history.shift();
-          }
+        // Track the attached sling's speed/chudness for the whole swing,
+        // regardless of whether the real projectile has already been released —
+        // this is what answers "where does speed actually peak?"
+        const kin = projectileKinematics(state);
+        const currChud = (state[2] - state[0]) * 180 / Math.PI;
+        if (kin.speed > maxSpeed){
+          maxSpeed = kin.speed;
+          maxChud = currChud;
+          maxTheta = state[0] * 180 / Math.PI;
+        }
+        if (!released && n % 25 === 0){
+          history.push({chud: currChud, speed: kin.speed});
+          if (history.length > 2000) history.shift();
+        }
 
-          if (releaseMode === 'auto'){
-            if (maxSpeed > 0.05 && kin.speed < maxSpeed){
-              triggerRelease({x:maxSpeedX, y:maxSpeedY, vx:maxSpeedVX, vy:maxSpeedVY,
-                chud:maxChud, theta:maxTheta, speed:maxSpeed, time:maxSpeedTime});
-            }
-          } else if (releaseMode === 'chud'){
-            if (currChud >= releaseTargetDeg){
-              triggerRelease({x:kin.xp, y:kin.yp, vx:kin.xpd, vy:kin.ypd,
-                chud:currChud, theta:state[0]*180/Math.PI, speed:kin.speed, time:simTime});
-            }
-          }
-          if (armFinished && !released){
-            // fallback: arm finished before the chosen release condition was met
+        if (!released){
+          if (currChud >= releaseTargetDeg){
+            triggerRelease({x:kin.xp, y:kin.yp, vx:kin.xpd, vy:kin.ypd,
+              chud:currChud, theta:state[0]*180/Math.PI, speed:kin.speed, time:simTime});
+          } else if (armFinished){
+            // fallback: arm finished before the chosen release angle was ever reached
             triggerRelease({x:kin.xp, y:kin.yp, vx:kin.xpd, vy:kin.ypd,
               chud:currChud, theta:state[0]*180/Math.PI, speed:kin.speed, time:simTime});
           }
@@ -589,17 +634,9 @@
           const disc = Math.max(0, B*B - 4*A*C);
           const te1 = (-B + Math.sqrt(disc)) / (2*A);
           const te2 = (-B - Math.sqrt(disc)) / (2*A);
-          const te = Math.max(te1, te2);
+          const te = Math.max(0, Math.max(te1, te2));
           const xLand = releaseInfo.x + releaseInfo.vx*te;
-          landed = true;
-          finished = true;
-          running = false;
-          landingInfo = {x: xLand, range: xLand, time: te};
-          document.getElementById('rRelease').textContent = 'landed';
-          document.getElementById('rRange').textContent = xLand.toFixed(2) + ' m';
-          document.getElementById('rFlightTime').textContent = te.toFixed(3) + ' s';
-          document.getElementById('rStatus').textContent = 'landed';
-          runBtn.textContent = 'Run';
+          landNow(xLand, te);
           break;
         }
       }
@@ -643,6 +680,12 @@
   const chartCanvas = document.getElementById('chart');
   const chartCtx = chartCanvas.getContext('2d');
 
+  // Pan/zoom state. panX/panY are in device-pixel units (same space as
+  // canvas.width/height), viewScale multiplies the base meters->pixels scale.
+  let viewScale = 1;
+  let panX = 0, panY = 0;
+  function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
   function fitCanvas(cv){
     const rect = cv.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
@@ -656,8 +699,9 @@
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0,0,w,h);
 
-    const scale = Math.min(w, h) / 6.4; // px per meter
-    const cx = w * 0.42, cy = h * 0.46;
+    const baseScale = Math.min(w, h) / 6.4; // px per meter at viewScale=1
+    const scale = baseScale * viewScale;
+    const cx = w * 0.42 + panX, cy = h * 0.46 + panY;
     const toPx = (x,y) => [cx + x*scale, cy - y*scale];
 
     // ground
@@ -713,23 +757,45 @@
     ctx.fillStyle = proj.free ? '#e7e4db' : '#7fbf8f';
     ctx.beginPath(); ctx.arc(ppx,ppy, 5*ratio, 0, 7); ctx.fill();
 
-    // landing marker
-    if (landed && landingInfo){
-      const [lx, ly] = toPx(landingInfo.x, -pivotH);
-      ctx.strokeStyle = '#d97757';
+    // landing markers — persisted across runs until Reset is pressed
+    pastLandings.forEach((rec, i)=>{
+      const isCurrent = (i === pastLandings.length - 1);
+      const flagH = (18 + (i % 6) * 16) * ratio;
+      const [lx, ly] = toPx(rec.x, -pivotH);
+      const color = isCurrent ? '#d97757' : 'rgba(217,119,87,0.45)';
+      ctx.strokeStyle = color;
       ctx.setLineDash([4*ratio,4*ratio]);
-      ctx.lineWidth = 1.2*ratio;
-      ctx.beginPath(); ctx.moveTo(lx, ly - 18*ratio); ctx.lineTo(lx, ly); ctx.stroke();
+      ctx.lineWidth = (isCurrent ? 1.4 : 1)*ratio;
+      ctx.beginPath(); ctx.moveTo(lx, ly - flagH); ctx.lineTo(lx, ly); ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = '#d97757';
-      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx-6*ratio, ly-10*ratio); ctx.lineTo(lx+6*ratio, ly-10*ratio); ctx.closePath(); ctx.fill();
-      ctx.font = (11*ratio) + 'px ui-monospace, monospace';
-      ctx.fillText(landingInfo.range.toFixed(2) + ' m', lx+8*ratio, ly-6*ratio);
-    }
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly - flagH);
+      ctx.lineTo(lx, ly - flagH + 12*ratio);
+      ctx.lineTo(lx + 8*ratio, ly - flagH + 6*ratio);
+      ctx.closePath(); ctx.fill();
+      ctx.font = (isCurrent ? 11 : 10)*ratio + 'px ui-monospace, monospace';
+      const chudLabel = (rec.chud !== null && rec.chud !== undefined) ? `, chud ${rec.chud.toFixed(0)}°` : '';
+      ctx.fillText(rec.range.toFixed(2) + ' m' + chudLabel, lx + 12*ratio, ly - flagH + 4*ratio);
+    });
 
-    // trail
+    // past trails — each run's path drawn as its own separate line, not
+    // connected to the next run's starting point
+    trailHistory.forEach(seg=>{
+      if (seg.length < 2) return;
+      ctx.strokeStyle = 'rgba(127,191,143,0.15)';
+      ctx.lineWidth = 1*ratio;
+      ctx.beginPath();
+      seg.forEach((pt,i)=>{
+        const [tx,ty] = toPx(pt.x, pt.y);
+        if (i===0) ctx.moveTo(tx,ty); else ctx.lineTo(tx,ty);
+      });
+      ctx.stroke();
+    });
+
+    // current run's trail
     if (trail.length > 1){
-      ctx.strokeStyle = 'rgba(127,191,143,0.35)';
+      ctx.strokeStyle = 'rgba(127,191,143,0.4)';
       ctx.lineWidth = 1.2*ratio;
       ctx.beginPath();
       trail.forEach((pt,i)=>{
@@ -741,6 +807,8 @@
   }
 
   let trail = [];
+  let trailHistory = []; // completed past runs' trails, each its own array of points
+  const MAX_TRAIL_HISTORY = 10;
 
   function drawChart(){
     const ratio = fitCanvas(chartCanvas);
@@ -813,7 +881,109 @@
     runBtn.textContent = running ? 'Pause' : 'Run';
     document.getElementById('rStatus').textContent = running ? 'running' : 'paused';
   });
-  resetBtn.addEventListener('click', ()=>{ trail = []; resetSim(); });
+  resetBtn.addEventListener('click', ()=>{ trail = []; trailHistory = []; pastLandings = []; resetSim(); });
+
+  // ---- Pan (drag) and zoom (wheel / buttons) ----
+  let isDragging = false, lastMouseX = 0, lastMouseY = 0;
+
+  canvas.addEventListener('mousedown', (e)=>{
+    isDragging = true;
+    lastMouseX = e.clientX; lastMouseY = e.clientY;
+    canvas.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if (!isDragging) return;
+    const ratio = window.devicePixelRatio || 1;
+    const dx = (e.clientX - lastMouseX) * ratio;
+    const dy = (e.clientY - lastMouseY) * ratio;
+    lastMouseX = e.clientX; lastMouseY = e.clientY;
+    panX += dx; panY += dy;
+    drawScene(state);
+  });
+  window.addEventListener('mouseup', ()=>{
+    isDragging = false;
+    canvas.classList.remove('dragging');
+  });
+  canvas.addEventListener('mouseleave', ()=>{
+    // don't stop dragging on leave — mousemove/up are on window so drag
+    // continues smoothly if the cursor briefly exits the canvas
+  });
+
+  // touch support (single-finger pan)
+  let touchLastX = 0, touchLastY = 0, touching = false;
+  canvas.addEventListener('touchstart', (e)=>{
+    if (e.touches.length === 1){
+      touching = true;
+      touchLastX = e.touches[0].clientX; touchLastY = e.touches[0].clientY;
+    }
+  }, {passive:true});
+  canvas.addEventListener('touchmove', (e)=>{
+    if (!touching || e.touches.length !== 1) return;
+    const ratio = window.devicePixelRatio || 1;
+    const dx = (e.touches[0].clientX - touchLastX) * ratio;
+    const dy = (e.touches[0].clientY - touchLastY) * ratio;
+    touchLastX = e.touches[0].clientX; touchLastY = e.touches[0].clientY;
+    panX += dx; panY += dy;
+    drawScene(state);
+    e.preventDefault();
+  }, {passive:false});
+  canvas.addEventListener('touchend', ()=>{ touching = false; });
+
+  canvas.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
+    viewScale = clamp(viewScale * factor, 0.15, 10);
+    drawScene(state);
+  }, {passive:false});
+
+  document.getElementById('zoomInBtn').addEventListener('click', ()=>{
+    viewScale = clamp(viewScale * 1.25, 0.15, 10);
+    drawScene(state);
+  });
+  document.getElementById('zoomOutBtn').addEventListener('click', ()=>{
+    viewScale = clamp(viewScale / 1.25, 0.15, 10);
+    drawScene(state);
+  });
+  document.getElementById('resetViewBtn').addEventListener('click', ()=>{
+    viewScale = 1; panX = 0; panY = 0;
+    drawScene(state);
+  });
+  document.getElementById('fitBtn').addEventListener('click', ()=>{
+    fitViewToTrajectory();
+  });
+
+  function fitViewToTrajectory(){
+    const reach = L2 + currentS;
+    let minX = -reach, maxX = reach, minY = -pivotH, maxY = reach;
+    trail.forEach(p=>{
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    });
+    trailHistory.forEach(seg=>seg.forEach(p=>{
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    }));
+    if (landed && landingInfo){
+      minX = Math.min(minX, landingInfo.x); maxX = Math.max(maxX, landingInfo.x);
+    }
+    pastLandings.forEach(rec=>{
+      minX = Math.min(minX, rec.x); maxX = Math.max(maxX, rec.x);
+    });
+    const ratio = fitCanvas(canvas);
+    const w = canvas.width, h = canvas.height;
+    const baseScale = Math.min(w, h) / 6.4;
+    const spanX = Math.max(0.5, (maxX - minX)) * 1.25;
+    const spanY = Math.max(0.5, (maxY - minY)) * 1.35;
+    viewScale = clamp(Math.min(w*0.92/(baseScale*spanX), h*0.85/(baseScale*spanY)), 0.15, 10);
+
+    const worldCenterX = (minX + maxX) / 2;
+    const worldCenterY = (minY + maxY) / 2;
+    const cx0 = w * 0.42, cy0 = h * 0.46;
+    const scale = baseScale * viewScale;
+    panX = w/2 - cx0 - worldCenterX*scale;
+    panY = h/2 - cy0 + worldCenterY*scale;
+    drawScene(state);
+  }
 
   window.addEventListener('resize', ()=>{ drawScene(state); drawChart(); });
 
