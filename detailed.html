@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trebuchet Sling Simulator</title>
+<style>
+  :root{
+    --bg: #12161a;
+    --panel: #171c21;
+    --grid: #232a30;
+    --blue: #6fa8c9;
+    --brass: #c98a4b;
+    --ink: #e7e4db;
+    --muted: #8b939a;
+    --good: #7fbf8f;
+    --warn: #d97757;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  }
+  * { box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+  }
+  .wrap{
+    display:flex;
+    min-height:100vh;
+    flex-wrap: wrap;
+  }
+  .stage{
+    flex: 1 1 640px;
+    display:flex;
+    flex-direction:column;
+    padding: 22px;
+    min-width: 480px;
+  }
+  h1{
+    font-family: var(--serif);
+    font-weight: normal;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+    margin: 0 0 2px 0;
+    color: var(--ink);
+  }
+  .subtitle{
+    color: var(--muted);
+    font-size: 12.5px;
+    margin-bottom: 16px;
+    line-height:1.5;
+  }
+  canvas#main{
+    width: 100%;
+    height: 430px;
+    background:
+      repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 40px),
+      repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 40px),
+      var(--panel);
+    border: 1px solid #2a3138;
+    border-radius: 2px;
+    cursor: grab;
+    touch-action: none;
+  }
+  canvas#main.dragging{ cursor: grabbing; }
+  .canvasWrap{
+    position: relative;
+  }
+  .viewControls{
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    z-index: 2;
+  }
+  .viewControls button{
+    flex: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    font-size: 15px;
+    background: rgba(23,28,33,0.85);
+    backdrop-filter: blur(2px);
+  }
+  .viewControls button.wide{ width: auto; padding: 0 10px; font-size: 10.5px; }
+  .readouts{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .stat{
+    background: var(--panel);
+    border: 1px solid #2a3138;
+    padding: 10px 12px;
+    border-radius: 2px;
+  }
+  .stat .label{
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .stat .value{
+    font-size: 18px;
+    color: var(--blue);
+  }
+  .stat.peak .value{ color: var(--brass); }
+  canvas#chart{
+    width:100%;
+    height: 140px;
+    margin-top: 14px;
+    background: var(--panel);
+    border: 1px solid #2a3138;
+    border-radius: 2px;
+  }
+  .readoutKey{
+    margin-top: 12px;
+    padding: 14px 16px;
+    background: var(--panel);
+    border: 1px solid #2a3138;
+    border-radius: 2px;
+  }
+  .readoutKey h2{
+    margin: 0 0 10px 0;
+    font-family: var(--serif);
+    font-size: 16px;
+    font-weight: normal;
+    color: var(--ink);
+  }
+  .keyGrid{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 18px;
+  }
+  .keyItem{
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .keyItem b{
+    color: var(--ink);
+    font-weight: normal;
+  }
+  @media (max-width: 850px){
+    .keyGrid{ grid-template-columns: 1fr; }
+  }
+  .sidebar{
+    flex: 0 0 320px;
+    background: var(--panel);
+    border-left: 1px solid #2a3138;
+    padding: 22px;
+    display:flex;
+    flex-direction:column;
+    gap: 18px;
+  }
+  .field label{
+    display:block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .field .row{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+  }
+  .field input[type=range]{
+    flex:1;
+    accent-color: var(--blue);
+  }
+  .field input[type=number]{
+    width: 72px;
+    background: #0f1215;
+    border: 1px solid #2a3138;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 5px 6px;
+    border-radius: 2px;
+  }
+  .field select{
+    flex:1;
+    background: #0f1215;
+    border: 1px solid #2a3138;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 7px 6px;
+    border-radius: 2px;
+  }
+  .stat.release .value{ color: var(--good); }
+  .divider{
+    border-top: 1px solid #2a3138;
+    margin: 4px 0;
+  }
+  .note{
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .note b{ color: var(--ink); font-weight: normal; border-bottom: 1px dotted var(--muted); }
+  .warning{
+    font-size: 12px;
+    color: var(--warn);
+    background: rgba(217,119,87,0.08);
+    border: 1px solid rgba(217,119,87,0.35);
+    padding: 8px 10px;
+    border-radius: 2px;
+    display:none;
+  }
+  .btns{
+    display:flex;
+    gap: 10px;
+  }
+  button{
+    flex:1;
+    background: #1d242a;
+    color: var(--ink);
+    border: 1px solid #2f3944;
+    padding: 9px 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  button:hover{ border-color: var(--blue); color: var(--blue); }
+  button.primary{ border-color: var(--brass); color: var(--brass); }
+  button.primary:hover{ background: rgba(201,138,75,0.1); }
+  .eyebrow{
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .arms{
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .arms span{ color: var(--blue); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <h1>Trebuchet Sling Simulator</h1>
+    <div class="subtitle">
+      Long arm = 2.01682 m · short arm = 0.42318 m (fixed geometry). "Angle of chudness" is the sling's angle relative to the long arm,
+      unwrapped — 180° when folded flat back along the beam at the start, increasing as the sling whips around.
+    </div>
+    <div class="canvasWrap">
+      <div class="viewControls">
+        <button id="zoomInBtn" title="Zoom in">+</button>
+        <button id="zoomOutBtn" title="Zoom out">−</button>
+        <button id="fitBtn" class="wide" title="Fit view to trajectory">Fit</button>
+        <button id="resetViewBtn" class="wide" title="Reset view">Reset view</button>
+      </div>
+      <canvas id="main"></canvas>
+    </div>
+    <div class="readouts">
+      <div class="stat">
+        <div class="label">Beam angle θ</div>
+        <div class="value" id="rTheta">0.0°</div>
+      </div>
+      <div class="stat">
+        <div class="label">Sling angle relative to arm</div>
+        <div class="value" id="rChud">0.0°</div>
+      </div>
+      <div class="stat">
+        <div class="label">Projectile speed</div>
+        <div class="value" id="rSpeed">0.00 m/s</div>
+      </div>
+      <div class="stat">
+        <div class="label">Elapsed time</div>
+        <div class="value" id="rTime">0.000 s</div>
+      </div>
+      <div class="stat peak">
+        <div class="label">Max speed reached</div>
+        <div class="value" id="rMaxSpeed">— m/s</div>
+      </div>
+      <div class="stat peak">
+        <div class="label">Angle of Chudness (Sling-to-arm angle) where speed peaks</div>
+        <div class="value" id="rMaxChud">—°</div>
+      </div>
+      <div class="stat peak">
+        <div class="label">θ where speed peaks</div>
+        <div class="value" id="rMaxTheta">—°</div>
+      </div>
+      <div class="stat">
+        <div class="label">Status</div>
+        <div class="value" id="rStatus" style="font-size:14px;">idle</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Release status</div>
+        <div class="value" id="rRelease" style="font-size:14px;">attached</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Speed at release</div>
+        <div class="value" id="rRelSpeed">— m/s</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Projectile launch angle</div>
+        <div class="value" id="rLaunchAngle">—°</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Sling angle to ground</div>
+        <div class="value" id="rSlingGround">—°</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Release velocity (vx, vy)</div>
+        <div class="value" id="rRelVelocity" style="font-size:14px;">—</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Release height above ground</div>
+        <div class="value" id="rRelHeight">— m</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Range (from pivot base)</div>
+        <div class="value" id="rRange">— m</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Flight time (post-release)</div>
+        <div class="value" id="rFlightTime">— s</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Horizontal travel after release</div>
+        <div class="value" id="rTravel">— m</div>
+      </div>
+      <div class="stat release">
+        <div class="label">Impact speed</div>
+        <div class="value" id="rImpactSpeed">— m/s</div>
+      </div>
+    </div>
+    <canvas id="chart"></canvas>
+    <section class="readoutKey" aria-label="Readout key">
+      <h2>Readout Key</h2>
+      <div class="keyGrid">
+        <div class="keyItem"><b>Beam angle θ:</b> Angle of the throwing beam relative to the horizontal.</div>
+        <div class="keyItem"><b>Sling angle relative to arm:</b> The Angle of Chudness—the unwrapped angle between the sling and long arm.</div>
+        <div class="keyItem"><b>Projectile speed:</b> Current total speed of the projectile, whether attached or in flight.</div>
+        <div class="keyItem"><b>Elapsed time:</b> Total simulated time since the run began.</div>
+        <div class="keyItem"><b>Max speed reached:</b> Highest attached-projectile speed found during the powered swing.</div>
+        <div class="keyItem"><b>Sling-to-arm angle where speed peaks:</b> Angle of Chudness at the maximum attached-projectile speed.</div>
+        <div class="keyItem"><b>θ where speed peaks:</b> Beam angle when the maximum attached-projectile speed occurs.</div>
+        <div class="keyItem"><b>Status:</b> Current state of the simulation, such as idle, running, landed, or error.</div>
+        <div class="keyItem"><b>Release status:</b> Whether the projectile is attached, released, or landed.</div>
+        <div class="keyItem"><b>Speed at release:</b> Projectile speed at the exact release moment.</div>
+        <div class="keyItem"><b>Projectile launch angle:</b> Direction of the projectile velocity at release, measured from the horizontal.</div>
+        <div class="keyItem"><b>Sling angle to ground:</b> Absolute sling angle relative to the horizontal at release.</div>
+        <div class="keyItem"><b>Release velocity (vx, vy):</b> Horizontal and vertical projectile velocity components at release.</div>
+        <div class="keyItem"><b>Release height above ground:</b> Projectile height above ground at release.</div>
+        <div class="keyItem"><b>Range from pivot base:</b> Horizontal landing position measured from the vertical line beneath the pivot.</div>
+        <div class="keyItem"><b>Flight time:</b> Time from release until the projectile reaches the ground.</div>
+        <div class="keyItem"><b>Horizontal travel after release:</b> Horizontal distance from the release point to the landing point.</div>
+        <div class="keyItem"><b>Impact speed:</b> Projectile speed immediately before it reaches the ground.</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="sidebar">
+    <div class="eyebrow">Inputs</div>
+
+    <div class="field">
+      <label>Counterweight mass M (kg)</label>
+      <div class="row">
+        <input type="range" id="massSlider" min="1" max="80" step="0.5" value="20">
+        <input type="number" id="massNum" min="0" max="500" step="0.5" value="20">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Beam mass (kg)</label>
+      <div class="row">
+        <input type="range" id="beamMassSlider" min="0.5" max="40" step="0.1" value="6">
+        <input type="number" id="beamMassNum" min="0.1" max="200" step="0.1" value="6">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Counterweight mounting</label>
+      <div class="row">
+        <select id="cwMode">
+          <option value="hinged" selected>Hinged counterweight</option>
+          <option value="fixed">Fixed to short arm</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field" id="hingeLengthField">
+      <label>Counterweight hanger length (m)</label>
+      <div class="row">
+        <input type="range" id="hingeSlider" min="0.05" max="1.5" step="0.01" value="0.45">
+        <input type="number" id="hingeNum" min="0.01" max="5" step="0.01" value="0.45">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Sling length S (m)</label>
+      <div class="row">
+        <input type="range" id="slingSlider" min="0.2" max="4" step="0.02" value="2">
+        <input type="number" id="slingNum" min="0.05" max="10" step="0.02" value="2">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Projectile mass m (kg)</label>
+      <div class="row">
+        <input type="range" id="projSlider" min="0.01" max="5" step="0.01" value="0.15">
+        <input type="number" id="projNum" min="0.001" max="50" step="0.01" value="0.15">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Playback speed</label>
+      <div class="row">
+        <input type="range" id="speedSlider" min="0.1" max="3" step="0.05" value="1">
+        <input type="number" id="speedNum" min="0.05" max="10" step="0.05" value="1">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Angle of Chudness (°)</label>
+      <div class="row">
+        <input type="range" id="releaseTargetSlider" min="180" max="720" step="1" value="315">
+        <input type="number" id="releaseTargetNum" value="315" step="1">
+      </div>
+      <div class="note" style="margin-top:6px;">
+        The sling-to-arm angle starts at 180° (sling folded flat back along the beam) and increases
+        as the sling whips around — watch the live readout and the "chudness at max speed"
+        stat below to pick a sensible target.
+      </div>
+    </div>
+
+    <div class="warning" id="warnBox"></div>
+
+    <div class="btns">
+      <button class="primary" id="runBtn">Run</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="arms">
+      L1 (short/CW arm): <span>0.42318 m</span><br>
+      L2 (long/throw arm): <span>2.01682 m</span><br>
+      Pivot height: <span>1.22 m</span><br>
+      θ range: <span id="thetaRange">—</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="note">
+      <b>Model</b>: coupled Lagrangian dynamics are used for the beam, projectile/sling,
+      and counterweight. Projectile mass contributes to the system inertia and gravitational
+      torque. Beam rotational inertia is calculated from the entered beam mass and the fixed
+      short/long arm geometry. Choose either a fixed counterweight or a freely swinging hinged
+      counterweight with an adjustable hanger length. The sling and hinged counterweight are
+      modeled as massless links with point masses at their ends.      <br><br>
+      <b>Release</b> is controlled by the selected sling-to-arm angle. The simulator detects
+      the upward crossing and interpolates within the integration step to estimate the exact
+      release state. If the selected angle is never reached, the run stops without an arbitrary
+      fallback release. The peak-speed readout covers only the attached portion of the run,
+      so you can compare your chosen release point against where the theoretical peak
+      actually is.
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const L1 = 0.42318, L2 = 2.01682, g = 9.81, pivotH = 1.22;
+  const thetaI = -Math.asin(Math.min(1, pivotH / L2));
+  const thetaF = Math.PI + Math.asin(Math.min(1, pivotH / L2));
+  document.getElementById('thetaRange').textContent =
+    (thetaI*180/Math.PI).toFixed(1) + '° to ' + (thetaF*180/Math.PI).toFixed(1) + '°';
+  // Initial sling angle folds back along the beam (toward the pivot), matching
+  // a real trebuchet's pre-launch sling lying flat against the throwing arm.
+  const phi0 = thetaI + Math.PI;
+
+  // Coupled generalized coordinates:
+  // hinged CW: [theta, omega, phi, phidot, psi, psidot]
+  // fixed CW:   psi is carried for drawing only; its acceleration is constrained to theta.
+  // theta = beam angle, phi = absolute sling angle, psi = absolute CW-hanger angle.
+  function beamInertia(mBeam){
+    const totalLength = L1 + L2;
+    const comOffset = (L2 - L1) / 2;
+    return mBeam * (totalLength*totalLength/12 + comOffset*comOffset);
+  }
+
+  let physicsFault = null;
+
+  function solveLinear3(A, b){
+    const m = A.map((row,i)=>[...row,b[i]]);
+    for (let col=0; col<3; col++){
+      let pivot=col;
+      for (let r=col+1;r<3;r++) if (Math.abs(m[r][col])>Math.abs(m[pivot][col])) pivot=r;
+      if (!Number.isFinite(m[pivot][col]) || Math.abs(m[pivot][col]) < 1e-10){
+        physicsFault = 'The coupled mass matrix became singular or invalid. Check that all masses and lengths are positive.';
+        return null;
+      }
+      [m[col],m[pivot]]=[m[pivot],m[col]];
+      const d=m[col][col];
+      for(let c=col;c<4;c++) m[col][c]/=d;
+      for(let r=0;r<3;r++){
+        if(r===col) continue;
+        const f=m[r][col];
+        for(let c=col;c<4;c++) m[r][c]-=f*m[col][c];
+      }
+    }
+    const solution=[m[0][3],m[1][3],m[2][3]];
+    if (!solution.every(Number.isFinite)){
+      physicsFault = 'The physics solver produced a non-finite acceleration. Check the input values.';
+      return null;
+    }
+    return solution;
+  }
+
+  function massMatrix(q, M, mProj, mBeam, S, H, mode){
+    const [theta,phi,psi]=q;
+    const I = beamInertia(mBeam);
+    const beamCom = (L2-L1)/2;
+    const Atheta = I + mProj*L2*L2 + M*L1*L1;
+    const B = mProj*L2*S*Math.cos(theta-phi);
+    if(mode === 'fixed'){
+      return [
+        [Atheta, B, 0],
+        [B, mProj*S*S, 0],
+        [0,0,1]
+      ];
+    }
+    const C = -M*L1*H*Math.cos(theta-psi);
+    return [
+      [Atheta, B, C],
+      [B, mProj*S*S, 0],
+      [C, 0, M*H*H]
+    ];
+  }
+
+  function potentialGradient(q, M, mProj, mBeam, S, H, mode){
+    const [theta,phi,psi]=q;
+    const beamCom=(L2-L1)/2;
+    // dV/dq. Gravity generalized force is -gradient(V).
+    let dTheta = g*(mBeam*beamCom + mProj*L2 - M*L1)*Math.cos(theta);
+    const dPhi = g*mProj*S*Math.cos(phi);
+    if(mode === 'fixed'){
+      return [dTheta, dPhi, 0];
+    }
+    const dPsi = g*M*H*Math.cos(psi);
+    return [dTheta,dPhi,dPsi];
+  }
+
+  function coriolisVector(q, qd, M, mProj, mBeam, S, H, mode){
+    // Numerical Christoffel evaluation keeps the coupled model readable and
+    // automatically includes the velocity-squared coupling terms.
+    const eps=1e-6;
+    const dMdq=[];
+    for(let k=0;k<3;k++){
+      const qp=[...q], qm=[...q]; qp[k]+=eps; qm[k]-=eps;
+      const Mp=massMatrix(qp,M,mProj,mBeam,S,H,mode);
+      const Mm=massMatrix(qm,M,mProj,mBeam,S,H,mode);
+      dMdq[k]=Mp.map((row,i)=>row.map((v,j)=>(v-Mm[i][j])/(2*eps)));
+    }
+    const c=[0,0,0];
+    for(let i=0;i<3;i++) for(let j=0;j<3;j++) for(let k=0;k<3;k++){
+      const gamma=0.5*(dMdq[k][i][j]+dMdq[j][i][k]-dMdq[i][j][k]);
+      c[i]+=gamma*qd[j]*qd[k];
+    }
+    return c;
+  }
+
+  function deriv(s, M, S){
+    const theta=s[0], omega=s[1], phi=s[2], phidot=s[3], psi=s[4], psidot=s[5];
+    const q=[theta,phi,psi], qd=[omega,phidot,psidot];
+    const mode=currentCWMode;
+    const MM=massMatrix(q,M,currentM_proj,currentBeamMass,S,currentHingeLength,mode);
+    const gradV=potentialGradient(q,M,currentM_proj,currentBeamMass,S,currentHingeLength,mode);
+    const cor=coriolisVector(q,qd,M,currentM_proj,currentBeamMass,S,currentHingeLength,mode);
+    const rhs=gradV.map((v,i)=>-v-cor[i]);
+    let qdd=solveLinear3(MM,rhs);
+    if (!qdd) return [0,0,0,0,0,0];
+    if(mode==='fixed'){
+      // Fixed CW is rigidly attached to the short arm.
+      qdd[2]=qdd[0];
+    }
+    return [omega,qdd[0],phidot,qdd[1], mode==='fixed' ? omega : psidot, qdd[2]];
+  }
+
+  function rk4Step(s, dt, M, S){
+    const k1 = deriv(s, M, S);
+    const s2 = s.map((v,i)=>v + k1[i]*dt/2);
+    const k2 = deriv(s2, M, S);
+    const s3 = s.map((v,i)=>v + k2[i]*dt/2);
+    const k3 = deriv(s3, M, S);
+    const s4 = s.map((v,i)=>v + k3[i]*dt);
+    const k4 = deriv(s4, M, S);
+    return s.map((v,i)=> v + (dt/6)*(k1[i] + 2*k2[i] + 2*k3[i] + k4[i]));
+  }
+
+  function projectileKinematics(s){
+    const theta=s[0], omega=s[1], phi=s[2], phidot=s[3];
+    const xtip = L2*Math.cos(theta), ytip = L2*Math.sin(theta);
+    const xtipd = -L2*Math.sin(theta)*omega, ytipd = L2*Math.cos(theta)*omega;
+    const S = currentS;
+    const xp = xtip + S*Math.cos(phi), yp = ytip + S*Math.sin(phi);
+    const xpd = xtipd - S*Math.sin(phi)*phidot, ypd = ytipd + S*Math.cos(phi)*phidot;
+    const speed = Math.hypot(xpd, ypd);
+    return {xtip, ytip, xp, yp, xpd, ypd, speed};
+  }
+
+  // ---- UI wiring ----
+  const massSlider = document.getElementById('massSlider');
+  const beamMassSlider = document.getElementById('beamMassSlider');
+  const beamMassNum = document.getElementById('beamMassNum');
+  const cwMode = document.getElementById('cwMode');
+  const hingeSlider = document.getElementById('hingeSlider');
+  const hingeNum = document.getElementById('hingeNum');
+  const hingeLengthField = document.getElementById('hingeLengthField');
+  const massNum = document.getElementById('massNum');
+  const slingSlider = document.getElementById('slingSlider');
+  const slingNum = document.getElementById('slingNum');
+  const projSlider = document.getElementById('projSlider');
+  const projNum = document.getElementById('projNum');
+  const speedSlider = document.getElementById('speedSlider');
+  const speedNum = document.getElementById('speedNum');
+  const runBtn = document.getElementById('runBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const warnBox = document.getElementById('warnBox');
+  const releaseTargetSlider = document.getElementById('releaseTargetSlider');
+  const releaseTargetNum = document.getElementById('releaseTargetNum');
+
+  function clampInput(input){
+    let value = Number(input.value);
+    const min = input.min === '' ? -Infinity : Number(input.min);
+    const max = input.max === '' ? Infinity : Number(input.max);
+    if (!Number.isFinite(value)) return null;
+    value = Math.max(min, Math.min(max, value));
+    input.value = value;
+    return value;
+  }
+
+  function link(slider, num, onChange){
+    slider.addEventListener('input', ()=>{ num.value = slider.value; onChange(); });
+    num.addEventListener('change', ()=>{
+      const value=clampInput(num);
+      if (value === null) num.value=slider.value;
+      else slider.value=Math.max(Number(slider.min),Math.min(Number(slider.max),value));
+      onChange();
+    });
+  }
+
+  let currentM = parseFloat(massSlider.value);
+  let currentBeamMass = parseFloat(beamMassNum.value);
+  let currentCWMode = cwMode.value;
+  let currentHingeLength = parseFloat(hingeNum.value);
+  let currentS = parseFloat(slingSlider.value);
+  let currentM_proj = parseFloat(projSlider.value);
+  let playbackSpeed = parseFloat(speedSlider.value);
+  let releaseTargetDeg = parseFloat(releaseTargetNum.value);
+
+  function onParamChange(){
+    currentM = clampInput(massNum);
+    currentBeamMass = clampInput(beamMassNum);
+    currentCWMode = cwMode.value;
+    currentHingeLength = clampInput(hingeNum);
+    hingeLengthField.style.display = currentCWMode === 'hinged' ? 'block' : 'none';
+    currentS = clampInput(slingNum);
+    currentM_proj = clampInput(projNum);
+    if (![currentM,currentBeamMass,currentHingeLength,currentS,currentM_proj].every(v=>Number.isFinite(v) && v>0)){
+      warnBox.style.display='block';
+      warnBox.textContent='All masses and lengths must be positive finite numbers.';
+      return;
+    }
+    checkWarning();
+    if (!running) resetSim();
+  }
+
+  function onSpeedChange(){
+    const value=clampInput(speedNum);
+    if (value !== null) playbackSpeed=value;
+  }
+
+  function onReleaseTargetChange(){
+    const value=Number(releaseTargetNum.value);
+    if (Number.isFinite(value)) releaseTargetDeg=value;
+    if (!running) resetSim();
+  }
+
+  link(massSlider, massNum, onParamChange);
+  link(beamMassSlider, beamMassNum, onParamChange);
+  link(hingeSlider, hingeNum, onParamChange);
+  cwMode.addEventListener('change', onParamChange);
+  link(slingSlider, slingNum, onParamChange);
+  link(projSlider, projNum, onParamChange);
+  link(speedSlider, speedNum, onSpeedChange);
+  link(releaseTargetSlider, releaseTargetNum, onReleaseTargetChange);
+
+  function checkWarning(){
+    const s0=[thetaI,0,phi0,0,currentCWMode==='fixed'?thetaI+Math.PI:-Math.PI/2,0];
+    const initialAlpha=deriv(s0,currentM,currentS)[1];
+    if (initialAlpha <= 0){
+      warnBox.style.display = 'block';
+      warnBox.textContent = 'The current masses and geometry do not produce forward initial beam acceleration. Increase counterweight mass or reduce beam/projectile mass.';
+    } else {
+      warnBox.style.display = 'none';
+    }
+  }
+
+  // ---- Simulation state ----
+  let state = [thetaI, 0, phi0, 0, -Math.PI/2, 0]; // plus CW hanger angle/rate
+  let simTime = 0;
+  let running = false;
+  let finished = false;
+  let armStarted = false;   // true once omega has clearly gone positive
+  let armFinished = false;  // true once the beam has reached its turning point
+  let maxSpeed = 0, maxChud = 0, maxTheta = 0;
+  let history = []; // {chud, speed}
+  const dt = 0.0004;
+  const MAX_ARM_TIME = 8;     // safety cap on the powered swing, in simulated seconds
+  const MAX_FLIGHT_TIME = 12; // safety cap on post-release ballistic flight
+
+  let released = false;
+  let releaseInfo = null;   // {x,y,vx,vy,chud,theta,speed,time}
+  let landed = false;
+  let landingInfo = null;   // {x, range, time}
+  // Persists across runs — only cleared by the Reset button — so multiple
+  // release-angle trials can be compared on the canvas at once.
+  let pastLandings = [];    // [{x, range, chud, theta}]
+  const MAX_PAST_LANDINGS = 10;
+
+  function resetSim(){
+    if (trail.length > 1){
+      trailHistory.push(trail);
+      if (trailHistory.length > MAX_TRAIL_HISTORY) trailHistory.shift();
+    }
+    trail = [];
+    state = [thetaI, 0, phi0, 0, currentCWMode==='fixed' ? thetaI+Math.PI : -Math.PI/2, 0];
+    simTime = 0;
+    running = false;
+    finished = false;
+    armStarted = false;
+    armFinished = false;
+    maxSpeed = 0; maxChud = 0; maxTheta = 0;
+    history = [];
+    physicsFault = null;
+    released = false;
+    releaseInfo = null;
+    landed = false;
+    landingInfo = null;
+    checkWarning();
+    updateReadouts();
+    drawScene(state);
+    drawChart();
+    document.getElementById('rStatus').textContent = 'idle';
+    document.getElementById('rRelease').textContent = 'attached';
+    document.getElementById('rRelSpeed').textContent = '— m/s';
+    document.getElementById('rLaunchAngle').textContent = '—°';
+    document.getElementById('rSlingGround').textContent = '—°';
+    document.getElementById('rRelVelocity').textContent = '—';
+    document.getElementById('rRelHeight').textContent = '— m';
+    document.getElementById('rRange').textContent = '— m';
+    document.getElementById('rFlightTime').textContent = '— s';
+    document.getElementById('rTravel').textContent = '— m';
+    document.getElementById('rImpactSpeed').textContent = '— m/s';
+    runBtn.textContent = 'Run';
+  }
+
+  function triggerRelease(info){
+    released = true;
+    armFinished = true; // The detached projectile no longer contributes to mechanism dynamics.
+    releaseInfo = info;
+    document.getElementById('rRelease').textContent = 'released';
+    document.getElementById('rRelSpeed').textContent = info.speed.toFixed(2) + ' m/s';
+    document.getElementById('rLaunchAngle').textContent = info.launchAngle.toFixed(1) + '°';
+    document.getElementById('rSlingGround').textContent = info.slingGround.toFixed(1) + '°';
+    document.getElementById('rRelVelocity').textContent = '(' + info.vx.toFixed(2) + ', ' + info.vy.toFixed(2) + ') m/s';
+    document.getElementById('rRelHeight').textContent = (info.y + pivotH).toFixed(2) + ' m';
+    if (info.y <= -pivotH){
+      // Sling was already at/below ground level at the chosen release point
+      // (can happen with long slings relative to the arm) — land immediately
+      // rather than reporting a nonsensical negative flight time.
+      landNow(info.x, 0);
+    }
+  }
+
+  function landNow(x, te){
+    landed = true;
+    finished = true;
+    running = false;
+    const impactVy = releaseInfo ? releaseInfo.vy - g*te : 0;
+    const impactSpeed = releaseInfo ? Math.hypot(releaseInfo.vx, impactVy) : 0;
+    const travel = releaseInfo ? x - releaseInfo.x : 0;
+    landingInfo = {x, range: x, time: te, travel, impactSpeed};
+    pastLandings.push({
+      x, range: x,
+      chud: releaseInfo ? releaseInfo.chud : null,
+      theta: releaseInfo ? releaseInfo.theta : null
+    });
+    if (pastLandings.length > MAX_PAST_LANDINGS) pastLandings.shift();
+    document.getElementById('rRelease').textContent = 'landed';
+    document.getElementById('rRange').textContent = x.toFixed(2) + ' m';
+    document.getElementById('rFlightTime').textContent = te.toFixed(3) + ' s';
+    document.getElementById('rTravel').textContent = travel.toFixed(2) + ' m';
+    document.getElementById('rImpactSpeed').textContent = impactSpeed.toFixed(2) + ' m/s';
+    document.getElementById('rStatus').textContent = te === 0 ? 'released below ground level' : 'landed';
+    runBtn.textContent = 'Run';
+  }
+
+  // Note: the beam's own equation is energy-conservative, so it swings up
+  // toward theta_f and its angular velocity approaches zero right there
+  // rather than overshooting it — that's "arc complete" for the beam. The
+  // projectile, once released, is simulated independently as free-flight
+  // ballistic motion (gravity only) until it reaches ground level.
+  function interpolateState(a, b, f){
+    return a.map((v,i)=>v + (b[i]-v)*f);
+  }
+
+  function releaseRecord(releaseState, releaseTime){
+    const kin=projectileKinematics(releaseState);
+    const slingArm=(releaseState[2]-releaseState[0])*180/Math.PI;
+    return {
+      x:kin.xp, y:kin.yp, vx:kin.xpd, vy:kin.ypd,
+      chud:slingArm,
+      slingGround:releaseState[2]*180/Math.PI,
+      launchAngle:Math.atan2(kin.ypd,kin.xpd)*180/Math.PI,
+      theta:releaseState[0]*180/Math.PI,
+      speed:kin.speed,
+      time:releaseTime
+    };
+  }
+
+  function failPhysics(message){
+    finished=true;
+    running=false;
+    document.getElementById('rStatus').textContent=message;
+    warnBox.style.display='block';
+    warnBox.textContent=message;
+    runBtn.textContent='Run';
+  }
+
+  function stepSim(realDt){
+    if (finished) return;
+    let toStep = realDt * playbackSpeed;
+    const maxSubsteps = 4000;
+    let n = 0;
+    while (toStep > 0 && n < maxSubsteps){
+      const h = Math.min(dt, toStep);
+      const previousState=[...state];
+      const previousTime=simTime;
+      const previousChud=(previousState[2]-previousState[0])*180/Math.PI;
+
+      if (!armFinished){
+        state = rk4Step(state, h, currentM, currentS);
+        if (physicsFault){
+          failPhysics(physicsFault);
+          break;
+        }
+      }
+      simTime += h;
+      toStep -= h;
+      n++;
+
+      if (!armFinished){
+        if (state[1] > 0.02) armStarted = true;
+        const stalledAtStart = (!armStarted && simTime > 1.0);
+        const turnedBack = (armStarted && state[1] <= 0);
+
+        const kin = projectileKinematics(state);
+        const currChud = (state[2] - state[0]) * 180 / Math.PI;
+        if (kin.speed > maxSpeed){
+          maxSpeed = kin.speed;
+          maxChud = currChud;
+          maxTheta = state[0] * 180 / Math.PI;
+        }
+        if (!released && n % 25 === 0){
+          history.push({chud: currChud, speed: kin.speed});
+          if (history.length > 2000) history.shift();
+        }
+
+        if (!released){
+          const startsAtTarget = previousTime === 0 && Math.abs(previousChud-releaseTargetDeg) < 1e-9;
+          const crossedUpward = previousChud < releaseTargetDeg && currChud >= releaseTargetDeg;
+          if (startsAtTarget){
+            triggerRelease(releaseRecord(previousState,previousTime));
+          } else if (crossedUpward){
+            const span=currChud-previousChud;
+            const f=span === 0 ? 1 : Math.max(0,Math.min(1,(releaseTargetDeg-previousChud)/span));
+            const exactState=interpolateState(previousState,state,f);
+            const exactTime=previousTime+f*h;
+            state=exactState;
+            simTime=exactTime;
+            triggerRelease(releaseRecord(exactState,exactTime));
+          }
+        }
+
+        if (!released && (turnedBack || stalledAtStart || simTime > MAX_ARM_TIME)){
+          armFinished = true;
+          finished = true;
+          running = false;
+          document.getElementById('rRelease').textContent = 'not reached';
+          document.getElementById('rStatus').textContent = stalledAtStart
+            ? 'stalled — increase counterweight mass'
+            : 'selected release angle was not reached';
+          runBtn.textContent = 'Run';
+          break;
+        }
+      }
+
+      if (released && !landed){
+        const el = simTime - releaseInfo.time;
+        const y = releaseInfo.y + releaseInfo.vy*el - 0.5*g*el*el;
+        if (y <= -pivotH){
+          const A = -0.5*g, B = releaseInfo.vy, C = releaseInfo.y + pivotH;
+          const disc = Math.max(0, B*B - 4*A*C);
+          const roots=[(-B + Math.sqrt(disc))/(2*A),(-B - Math.sqrt(disc))/(2*A)]
+            .filter(t=>Number.isFinite(t) && t>=0);
+          const te=roots.length ? Math.max(...roots) : 0;
+          const xLand = releaseInfo.x + releaseInfo.vx*te;
+          landNow(xLand, te);
+          break;
+        }
+      }
+
+      if (simTime > MAX_ARM_TIME + MAX_FLIGHT_TIME){
+        finished = true; running = false; runBtn.textContent = 'Run';
+        break;
+      }
+    }
+  }
+
+  function currentProjectileState(){
+    if (released){
+      const el = Math.max(0, simTime - releaseInfo.time);
+      const x = releaseInfo.x + releaseInfo.vx*el;
+      const y = releaseInfo.y + releaseInfo.vy*el - 0.5*g*el*el;
+      const vy = releaseInfo.vy - g*el;
+      const speed = Math.hypot(releaseInfo.vx, vy);
+      return {x, y, speed, free:true};
+    }
+    const kin = projectileKinematics(state);
+    return {x: kin.xp, y: kin.yp, speed: kin.speed, free:false};
+  }
+
+  function updateReadouts(){
+    const proj = currentProjectileState();
+    document.getElementById('rTheta').textContent = (state[0]*180/Math.PI).toFixed(1) + '°';
+    document.getElementById('rChud').textContent = released
+      ? '—°'
+      : ((state[2]-state[0])*180/Math.PI).toFixed(1) + '°';
+    document.getElementById('rSpeed').textContent = proj.speed.toFixed(2) + ' m/s';
+    document.getElementById('rTime').textContent = simTime.toFixed(3) + ' s';
+    document.getElementById('rMaxSpeed').textContent = maxSpeed > 0 ? maxSpeed.toFixed(2) + ' m/s' : '— m/s';
+    document.getElementById('rMaxChud').textContent = maxSpeed > 0 ? maxChud.toFixed(1) + '°' : '—°';
+    document.getElementById('rMaxTheta').textContent = maxSpeed > 0 ? maxTheta.toFixed(1) + '°' : '—°';
+  }
+
+  // ---- Drawing ----
+  const canvas = document.getElementById('main');
+  const ctx = canvas.getContext('2d');
+  const chartCanvas = document.getElementById('chart');
+  const chartCtx = chartCanvas.getContext('2d');
+
+  // Pan/zoom state. panX/panY are in device-pixel units (same space as
+  // canvas.width/height), viewScale multiplies the base meters->pixels scale.
+  let viewScale = 1;
+  let panX = 0, panY = 0;
+  function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+  function fitCanvas(cv){
+    const rect = cv.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    cv.width = rect.width * ratio;
+    cv.height = rect.height * ratio;
+    return ratio;
+  }
+
+  function drawScene(s){
+    const ratio = fitCanvas(canvas);
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+
+    const baseScale = Math.min(w, h) / 6.4; // px per meter at viewScale=1
+    const scale = baseScale * viewScale;
+    const cx = w * 0.42 + panX, cy = h * 0.46 + panY;
+    const toPx = (x,y) => [cx + x*scale, cy - y*scale];
+
+    // ground
+    const [gx1, gy] = toPx(-6, -pivotH);
+    const [gx2] = toPx(6, -pivotH);
+    ctx.strokeStyle = '#3a434b';
+    ctx.lineWidth = 1.5*ratio;
+    ctx.beginPath(); ctx.moveTo(gx1,gy); ctx.lineTo(gx2,gy); ctx.stroke();
+    // ground hatch
+    ctx.strokeStyle = '#2a3138';
+    ctx.lineWidth = 1*ratio;
+    for(let x=-6; x<=6; x+=0.35){
+      const [x1,y1] = toPx(x,-pivotH);
+      const [x2,y2] = toPx(x-0.25,-pivotH-0.25);
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    }
+
+    // pivot support triangle
+    const [px,py] = toPx(0,0);
+    const [bx1,by1] = toPx(-0.35,-pivotH);
+    const [bx2,by2] = toPx(0.35,-pivotH);
+    ctx.fillStyle = '#2a3138';
+    ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(bx1,by1); ctx.lineTo(bx2,by2); ctx.closePath(); ctx.fill();
+
+    const theta = s[0];
+    const xtip = L2*Math.cos(theta), ytip = L2*Math.sin(theta);
+    const xShort = -L1*Math.cos(theta), yShort = -L1*Math.sin(theta);
+    const psi = currentCWMode==='fixed' ? theta+Math.PI : s[4];
+    const xcw = currentCWMode==='fixed' ? xShort : xShort + currentHingeLength*Math.cos(psi);
+    const ycw = currentCWMode==='fixed' ? yShort : yShort + currentHingeLength*Math.sin(psi);
+    const [tipPx, tipPy] = toPx(xtip, ytip);
+    const [shortPx, shortPy] = toPx(xShort,yShort);
+    const [cwPx, cwPy] = toPx(xcw, ycw);
+
+    // beam
+    ctx.strokeStyle = '#c7c2b6';
+    ctx.lineWidth = 4*ratio;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(shortPx,shortPy); ctx.lineTo(tipPx,tipPy); ctx.stroke();
+
+    if(currentCWMode==='hinged'){
+      ctx.strokeStyle='#c98a4b'; ctx.lineWidth=2*ratio;
+      ctx.beginPath(); ctx.moveTo(shortPx,shortPy); ctx.lineTo(cwPx,cwPy); ctx.stroke();
+    }
+
+    // pivot point
+    ctx.fillStyle = '#6fa8c9';
+    ctx.beginPath(); ctx.arc(px,py, 4.5*ratio, 0, 7); ctx.fill();
+
+    // counterweight
+    ctx.fillStyle = '#c98a4b';
+    ctx.beginPath(); ctx.arc(cwPx,cwPy, (7+2*Math.min(currentM/40,1))*ratio, 0, 7); ctx.fill();
+
+    // sling + projectile
+    const proj = currentProjectileState();
+    const [ppx, ppy] = toPx(proj.x, proj.y);
+    if (!proj.free){
+      ctx.strokeStyle = '#7fbf8f';
+      ctx.lineWidth = 2*ratio;
+      ctx.beginPath(); ctx.moveTo(tipPx,tipPy); ctx.lineTo(ppx,ppy); ctx.stroke();
+    }
+    ctx.fillStyle = proj.free ? '#e7e4db' : '#7fbf8f';
+    ctx.beginPath(); ctx.arc(ppx,ppy, 5*ratio, 0, 7); ctx.fill();
+
+    // landing markers — persisted across runs until Reset is pressed
+    pastLandings.forEach((rec, i)=>{
+      const isCurrent = (i === pastLandings.length - 1);
+      const flagH = (18 + (i % 6) * 16) * ratio;
+      const [lx, ly] = toPx(rec.x, -pivotH);
+      const color = isCurrent ? '#d97757' : 'rgba(217,119,87,0.45)';
+      ctx.strokeStyle = color;
+      ctx.setLineDash([4*ratio,4*ratio]);
+      ctx.lineWidth = (isCurrent ? 1.4 : 1)*ratio;
+      ctx.beginPath(); ctx.moveTo(lx, ly - flagH); ctx.lineTo(lx, ly); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly - flagH);
+      ctx.lineTo(lx, ly - flagH + 12*ratio);
+      ctx.lineTo(lx + 8*ratio, ly - flagH + 6*ratio);
+      ctx.closePath(); ctx.fill();
+      ctx.font = (isCurrent ? 11 : 10)*ratio + 'px ui-monospace, monospace';
+      const chudLabel = (rec.chud !== null && rec.chud !== undefined) ? `, chud ${rec.chud.toFixed(0)}°` : '';
+      ctx.fillText(rec.range.toFixed(2) + ' m' + chudLabel, lx + 12*ratio, ly - flagH + 4*ratio);
+    });
+
+    // past trails — each run's path drawn as its own separate line, not
+    // connected to the next run's starting point
+    trailHistory.forEach(seg=>{
+      if (seg.length < 2) return;
+      ctx.strokeStyle = 'rgba(127,191,143,0.15)';
+      ctx.lineWidth = 1*ratio;
+      ctx.beginPath();
+      seg.forEach((pt,i)=>{
+        const [tx,ty] = toPx(pt.x, pt.y);
+        if (i===0) ctx.moveTo(tx,ty); else ctx.lineTo(tx,ty);
+      });
+      ctx.stroke();
+    });
+
+    // current run's trail
+    if (trail.length > 1){
+      ctx.strokeStyle = 'rgba(127,191,143,0.4)';
+      ctx.lineWidth = 1.2*ratio;
+      ctx.beginPath();
+      trail.forEach((pt,i)=>{
+        const [tx,ty] = toPx(pt.x, pt.y);
+        if (i===0) ctx.moveTo(tx,ty); else ctx.lineTo(tx,ty);
+      });
+      ctx.stroke();
+    }
+  }
+
+  let trail = [];
+  let trailHistory = []; // completed past runs' trails, each its own array of points
+  const MAX_TRAIL_HISTORY = 10;
+
+  function drawChart(){
+    const ratio = fitCanvas(chartCanvas);
+    const w = chartCanvas.width, h = chartCanvas.height;
+    chartCtx.clearRect(0,0,w,h);
+    chartCtx.strokeStyle = '#2a3138';
+    chartCtx.lineWidth = 1;
+    chartCtx.strokeRect(0.5,0.5,w-1,h-1);
+
+    if (history.length < 2){
+      chartCtx.fillStyle = '#8b939a';
+      chartCtx.font = (11*ratio) + 'px ui-monospace, monospace';
+      chartCtx.fillText('speed vs angle of chudness — run the arc to populate', 12*ratio, h/2);
+      return;
+    }
+    const chuds = history.map(p=>p.chud);
+    const speeds = history.map(p=>p.speed);
+    const minC = Math.min(...chuds), maxC = Math.max(...chuds);
+    const maxS = Math.max(...speeds, 0.001);
+    const pad = 14*ratio;
+
+    function mapX(c){ return pad + (c-minC)/(maxC-minC || 1) * (w-2*pad); }
+    function mapY(v){ return h-pad - (v/maxS) * (h-2*pad); }
+
+    chartCtx.strokeStyle = '#6fa8c9';
+    chartCtx.lineWidth = 1.6*ratio;
+    chartCtx.beginPath();
+    history.forEach((p,i)=>{
+      const x = mapX(p.chud), y = mapY(p.speed);
+      if (i===0) chartCtx.moveTo(x,y); else chartCtx.lineTo(x,y);
+    });
+    chartCtx.stroke();
+
+    if (maxSpeed > 0){
+      const x = mapX(maxChud), y = mapY(maxSpeed);
+      chartCtx.fillStyle = '#c98a4b';
+      chartCtx.beginPath(); chartCtx.arc(x,y,4*ratio,0,7); chartCtx.fill();
+    }
+
+    chartCtx.fillStyle = '#8b939a';
+    chartCtx.font = (10*ratio) + 'px ui-monospace, monospace';
+    chartCtx.fillText('chudness →', w-70*ratio, h-4*ratio);
+    chartCtx.save();
+    chartCtx.translate(10*ratio, 14*ratio);
+    chartCtx.fillText('speed', 0, 0);
+    chartCtx.restore();
+  }
+
+  // ---- Main loop ----
+  let lastT = null;
+  function loop(ts){
+    if (lastT === null) lastT = ts;
+    const realDt = Math.min((ts - lastT)/1000, 0.05);
+    lastT = ts;
+    if (running) {
+      stepSim(realDt);
+      const proj = currentProjectileState();
+      trail.push({x: proj.x, y: proj.y});
+      if (trail.length > 600) trail.shift();
+      updateReadouts();
+      drawScene(state);
+      if (history.length % 3 === 0) drawChart();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  runBtn.addEventListener('click', ()=>{
+    if (finished){ resetSim(); }
+    running = !running;
+    runBtn.textContent = running ? 'Pause' : 'Run';
+    document.getElementById('rStatus').textContent = running ? 'running' : 'paused';
+  });
+  resetBtn.addEventListener('click', ()=>{ trail = []; trailHistory = []; pastLandings = []; resetSim(); });
+
+  // ---- Pan (drag) and zoom (wheel / buttons) ----
+  let isDragging = false, lastMouseX = 0, lastMouseY = 0;
+
+  canvas.addEventListener('mousedown', (e)=>{
+    isDragging = true;
+    lastMouseX = e.clientX; lastMouseY = e.clientY;
+    canvas.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if (!isDragging) return;
+    const ratio = window.devicePixelRatio || 1;
+    const dx = (e.clientX - lastMouseX) * ratio;
+    const dy = (e.clientY - lastMouseY) * ratio;
+    lastMouseX = e.clientX; lastMouseY = e.clientY;
+    panX += dx; panY += dy;
+    drawScene(state);
+  });
+  window.addEventListener('mouseup', ()=>{
+    isDragging = false;
+    canvas.classList.remove('dragging');
+  });
+  canvas.addEventListener('mouseleave', ()=>{
+    // don't stop dragging on leave — mousemove/up are on window so drag
+    // continues smoothly if the cursor briefly exits the canvas
+  });
+
+  // touch support (single-finger pan)
+  let touchLastX = 0, touchLastY = 0, touching = false;
+  canvas.addEventListener('touchstart', (e)=>{
+    if (e.touches.length === 1){
+      touching = true;
+      touchLastX = e.touches[0].clientX; touchLastY = e.touches[0].clientY;
+    }
+  }, {passive:true});
+  canvas.addEventListener('touchmove', (e)=>{
+    if (!touching || e.touches.length !== 1) return;
+    const ratio = window.devicePixelRatio || 1;
+    const dx = (e.touches[0].clientX - touchLastX) * ratio;
+    const dy = (e.touches[0].clientY - touchLastY) * ratio;
+    touchLastX = e.touches[0].clientX; touchLastY = e.touches[0].clientY;
+    panX += dx; panY += dy;
+    drawScene(state);
+    e.preventDefault();
+  }, {passive:false});
+  canvas.addEventListener('touchend', ()=>{ touching = false; });
+
+  canvas.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
+    viewScale = clamp(viewScale * factor, 0.15, 10);
+    drawScene(state);
+  }, {passive:false});
+
+  document.getElementById('zoomInBtn').addEventListener('click', ()=>{
+    viewScale = clamp(viewScale * 1.25, 0.15, 10);
+    drawScene(state);
+  });
+  document.getElementById('zoomOutBtn').addEventListener('click', ()=>{
+    viewScale = clamp(viewScale / 1.25, 0.15, 10);
+    drawScene(state);
+  });
+  document.getElementById('resetViewBtn').addEventListener('click', ()=>{
+    viewScale = 1; panX = 0; panY = 0;
+    drawScene(state);
+  });
+  document.getElementById('fitBtn').addEventListener('click', ()=>{
+    fitViewToTrajectory();
+  });
+
+  function fitViewToTrajectory(){
+    const reach = L2 + currentS;
+    let minX = -reach, maxX = reach, minY = -pivotH, maxY = reach;
+    trail.forEach(p=>{
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    });
+    trailHistory.forEach(seg=>seg.forEach(p=>{
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    }));
+    if (landed && landingInfo){
+      minX = Math.min(minX, landingInfo.x); maxX = Math.max(maxX, landingInfo.x);
+    }
+    pastLandings.forEach(rec=>{
+      minX = Math.min(minX, rec.x); maxX = Math.max(maxX, rec.x);
+    });
+    const ratio = fitCanvas(canvas);
+    const w = canvas.width, h = canvas.height;
+    const baseScale = Math.min(w, h) / 6.4;
+    const spanX = Math.max(0.5, (maxX - minX)) * 1.25;
+    const spanY = Math.max(0.5, (maxY - minY)) * 1.35;
+    viewScale = clamp(Math.min(w*0.92/(baseScale*spanX), h*0.85/(baseScale*spanY)), 0.15, 10);
+
+    const worldCenterX = (minX + maxX) / 2;
+    const worldCenterY = (minY + maxY) / 2;
+    const cx0 = w * 0.42, cy0 = h * 0.46;
+    const scale = baseScale * viewScale;
+    panX = w/2 - cx0 - worldCenterX*scale;
+    panY = h/2 - cy0 + worldCenterY*scale;
+    drawScene(state);
+  }
+
+  window.addEventListener('resize', ()=>{ drawScene(state); drawChart(); });
+
+  hingeLengthField.style.display = currentCWMode === 'hinged' ? 'block' : 'none';
+  resetSim();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
