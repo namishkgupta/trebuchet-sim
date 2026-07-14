@@ -221,8 +221,7 @@
   <div class="stage">
     <h1>Trebuchet Sling Simulator</h1>
     <div class="subtitle">
-      Long arm = 2.01682 m · short arm = 0.42318 m (fixed, per your optimization). Set counterweight mass, sling length,
-      and projectile mass below, then run the arc. "Angle of chudness" is the sling's angle relative to the long arm,
+      Long arm = 2.01682 m · short arm = 0.42318 m (fixed). "Angle of chudness" is the sling's angle relative to the long arm,
       unwrapped — 180° when folded flat back along the beam at the start, increasing as the sling whips around.
     </div>
     <div class="canvasWrap">
@@ -354,7 +353,7 @@
     <div class="divider"></div>
 
     <div class="note">
-      <b>Model</b>: the beam's tangential acceleration uses your derived
+      <b>Model</b>: the beam's tangential acceleration uses the derived
       α(θ) = ((8.372M − 31.265)/(0.179M + 2.243))·cos(θ), independent of the sling
       (per your assumption that projectile mass is negligible for the beam). The sling starts
       folded flat back along the beam (chudness = 180°) rather than extended past the tip,
