@@ -1070,16 +1070,17 @@
     const cx = w * 0.42 + panX, cy = h * 0.46 + panY;
     const toPx = (x,y) => [cx + x*scale, cy - y*scale];
 
-    // ground
-    const [gx1, gy] = toPx(-6, -pivotH);
-    const [gx2] = toPx(6, -pivotH);
+    // Ground spans the full visible canvas, including after panning or zooming.
+    const [, gy] = toPx(0, -pivotH);
+    const visibleLeft = -cx / scale;
+    const visibleRight = (w - cx) / scale;
     ctx.strokeStyle = '#3a434b';
     ctx.lineWidth = 1.5*ratio;
-    ctx.beginPath(); ctx.moveTo(gx1,gy); ctx.lineTo(gx2,gy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(w,gy); ctx.stroke();
     // ground hatch
     ctx.strokeStyle = '#2a3138';
     ctx.lineWidth = 1*ratio;
-    for(let x=-6; x<=6; x+=0.35){
+    for(let x=Math.floor(visibleLeft/0.35)*0.35; x<=visibleRight+0.25; x+=0.35){
       const [x1,y1] = toPx(x,-pivotH);
       const [x2,y2] = toPx(x-0.25,-pivotH-0.25);
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
