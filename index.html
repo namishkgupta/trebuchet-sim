@@ -44,6 +44,61 @@
     margin: 0 0 2px 0;
     color: var(--ink);
   }
+  .simulatorHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+    margin-bottom:2px;
+  }
+  .simulatorHeader h1{ margin:0; }
+  .modeSelector{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex:none;
+    color:var(--muted);
+    font-size:10px;
+    letter-spacing:0.8px;
+    text-transform:uppercase;
+  }
+  .modeSelectorLabel.active{ color:var(--ink); }
+  button.modeSwitch{
+    position:relative;
+    flex:none;
+    width:48px;
+    height:26px;
+    padding:2px;
+    border:1px solid #2f3944;
+    border-radius:13px;
+    background:#0f1215;
+    line-height:1;
+  }
+  button.modeSwitch:hover{ border-color:var(--blue); }
+  button.modeSwitch:focus-visible{
+    outline:2px solid var(--blue);
+    outline-offset:3px;
+  }
+  .modeSwitchKnob{
+    display:block;
+    width:20px;
+    height:20px;
+    border-radius:50%;
+    background:var(--blue);
+    box-shadow:0 1px 5px rgba(0,0,0,0.45);
+    transform:translateX(0);
+    transition:transform 220ms cubic-bezier(0.4, 0, 0.2, 1), background-color 220ms ease;
+  }
+  button.modeSwitch[aria-checked="true"] .modeSwitchKnob{
+    background:var(--brass);
+    transform:translateX(22px);
+  }
+  @media (max-width: 620px){
+    .simulatorHeader{ align-items:flex-start; flex-direction:column; gap:10px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .modeSwitchKnob{ transition:none; }
+  }
   .subtitle{
     color: var(--muted);
     font-size: 12.5px;
@@ -219,7 +274,16 @@
 <body>
 <div class="wrap">
   <div class="stage">
-    <h1>Trebuchet Sling Simulator</h1>
+    <div class="simulatorHeader">
+      <h1>Trebuchet Sling Simulator</h1>
+      <div class="modeSelector" aria-label="Simulator mode">
+        <span class="modeSelectorLabel active">Simple</span>
+        <button class="modeSwitch" id="simulatorModeSwitch" type="button" role="switch" aria-checked="false" aria-label="Switch to Detailed mode">
+          <span class="modeSwitchKnob" aria-hidden="true"></span>
+        </button>
+        <span class="modeSelectorLabel">Detailed</span>
+      </div>
+    </div>
     <div class="subtitle">
       Long arm = 2.01682 m · short arm = 0.42318 m (fixed). "Angle of chudness" is the sling's angle relative to the long arm,
       unwrapped — 180° when folded flat back along the beam at the start, increasing as the sling whips around.
@@ -374,6 +438,21 @@
 </div>
 
 <script>
+(() => {
+  const simulatorModeSwitchButton = document.getElementById('simulatorModeSwitch');
+  const simulatorModeLabels = document.querySelectorAll('.modeSelectorLabel');
+
+  simulatorModeSwitchButton.addEventListener('click', () => {
+    simulatorModeSwitchButton.setAttribute('aria-checked', 'true');
+    simulatorModeSwitchButton.setAttribute('aria-label', 'Switch to Simple mode');
+    simulatorModeLabels[0].classList.remove('active');
+    simulatorModeLabels[1].classList.add('active');
+
+    const simulatorModeTransitionDelay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240;
+    window.setTimeout(() => { window.location.href = 'detailed.html'; }, simulatorModeTransitionDelay);
+  });
+})();
+
 (function(){
   const L1 = 0.42318, L2 = 2.01682, g = 9.81, pivotH = 1.22;
   const thetaI = -Math.asin(Math.min(1, pivotH / L2));
